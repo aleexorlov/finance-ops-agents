@@ -75,6 +75,7 @@ def main() -> None:
     save_records(records, RESULTS_DIR / f"{prefix}{stamp}.json", meta)
     markdown = render_markdown(cases, records, meta)
     if not args.only:
+        (RESULTS_DIR / f"{stamp}.md").write_text(markdown, encoding="utf-8")
         (RESULTS_DIR / "latest.md").write_text(markdown, encoding="utf-8")
     print(markdown)
 
