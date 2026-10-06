@@ -20,6 +20,7 @@ class Snapshot:
     snapshot_date: date
     snapshot_time: str
     reporting_currency: str
+    payment_terms_days: int
     notice: str
 
 
@@ -47,5 +48,6 @@ class Database:
             snapshot_date=date.fromisoformat(meta["snapshot_date"]),
             snapshot_time=meta["snapshot_time"],
             reporting_currency=meta["reporting_currency"],
+            payment_terms_days=int(meta["payment_terms_days"]),
             notice=meta["notice"],
         )

@@ -13,7 +13,7 @@ from difflib import SequenceMatcher
 
 LEGAL_SUFFIXES = frozenset({"ltd", "limited", "inc", "gmbh", "sas", "bv", "llc", "plc"})
 WORD_SIMILARITY_THRESHOLD = 0.8
-MAX_MATCHES = 5
+MAX_MATCHES = 5  # how many matches a tool shows; it reports the total too
 
 
 def words(name: str) -> list[str]:
@@ -43,4 +43,4 @@ def match_accounts(query: str, rows: list[sqlite3.Row]) -> list[sqlite3.Row]:
         if min(scores) >= WORD_SIMILARITY_THRESHOLD:
             scored.append((sum(scores) / len(scores), row["account_id"], row))
     scored.sort(key=lambda item: (-item[0], item[1]))
-    return [row for _, _, row in scored[:MAX_MATCHES]]
+    return [row for _, _, row in scored]

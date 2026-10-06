@@ -2,7 +2,9 @@
 planted scenarios in finance_ops.data.scenario, so a change to the generator
 that moves them fails here first."""
 
+import sqlite3
 from collections.abc import Callable
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -235,3 +237,79 @@ def test_get_overdue_invoices_with_nothing_that_old_is_ok_and_empty(tools: Finan
     result = tools.get_overdue_invoices(3650)
     assert assert_envelope(result, "ok")["invoices"] == []
     assert result["message"]
+
+
+# --- data quality in invoice tools -------------------------------------------------------
+
+
+def test_compare_invoices_flags_a_month_billed_on_incomplete_usage(tools: FinanceTools) -> None:
+    result = tools.compare_invoices("INV-202608-1024", "INV-202609-1024")
+    data = assert_envelope(result, "partial")
+    assert data["changes"]["credits_change_pct"] < 0
+    assert "INV-202609-1024" in result["message"]
+    assert "not lower usage" in result["message"]
+
+
+def test_get_invoice_flags_usage_gaps_in_the_billed_month(tools: FinanceTools) -> None:
+    data = assert_envelope(tools.get_invoice("INV-202609-1024"), "partial")
+    assert data["metered_usage_coverage"]["days_missing"] == 3
+
+
+def test_compare_invoices_rejects_the_same_invoice_twice(tools: FinanceTools) -> None:
+    assert_envelope(tools.compare_invoices("INV-202609-1007", "inv-202609-1007"), "invalid_input")
+
+
+def test_get_data_status_includes_payment_terms(tools: FinanceTools) -> None:
+    assert tools.get_data_status()["data"]["payment_terms_days"] == 30
+
+
+@pytest.fixture
+def stale_payments_tools(db_file: Path, tmp_path: Path) -> FinanceTools:
+    """A copy of the database whose payments feed stopped two days early."""
+    copy = tmp_path / "stale.sqlite"
+    copy.write_bytes(db_file.read_bytes())
+    with closing(sqlite3.connect(copy)) as conn, conn:
+        conn.execute("UPDATE feed_status SET covers_through = '2026-10-02' WHERE feed = 'payments'")
+    return FinanceTools(Database(copy))
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda t: t.get_overdue_invoices(),
+        lambda t: t.list_invoices("ACC-1012"),
+        lambda t: t.get_invoice("INV-202608-1009"),
+    ],
+    ids=["get_overdue_invoices", "list_invoices", "get_invoice"],
+)
+def test_balances_are_stale_when_the_payments_feed_is_behind(
+    stale_payments_tools: FinanceTools, call: Callable[[FinanceTools], dict[str, Any]]
+) -> None:
+    result = call(stale_payments_tools)
+    assert_envelope(result, "stale")
+    assert "2026-10-02" in result["message"]
+
+
+def test_find_accounts_says_when_it_shows_only_some_matches(
+    tools: FinanceTools, monkeypatch: pytest.MonkeyPatch, db_file: Path
+) -> None:
+    with closing(sqlite3.connect(db_file)) as conn:
+        conn.row_factory = sqlite3.Row
+        seven = conn.execute("SELECT * FROM accounts ORDER BY account_id LIMIT 7").fetchall()
+    monkeypatch.setattr("finance_ops.server.tools.match_accounts", lambda query, rows: seven)
+    result = tools.find_accounts("anything")
+    data = assert_envelope(result, "ambiguous")
+    assert (len(data["matches"]), data["total_matches"], data["truncated"]) == (5, 7, True)
+    assert result["message"].startswith("7 accounts match")
+
+
+def test_stale_beats_partial_when_both_apply() -> None:
+    from datetime import date
+
+    from finance_ops.server.analysis import coverage, usage_status
+
+    days = [date(2026, 10, d) for d in range(1, 5)]
+    cov = coverage(days, {date(2026, 10, 1): 5}, covers_through=date(2026, 10, 2))
+    status, message = usage_status(cov, date(2026, 10, 2), date(2026, 10, 4))
+    assert status == "stale"
+    assert "2026-10-02" in message and "missing data" in message

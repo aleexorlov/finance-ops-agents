@@ -9,6 +9,7 @@
 # Generated data and run logs
 data/*.sqlite
 data/*.sqlite-*
+data/*.tmp
 runs/
 
 # Python

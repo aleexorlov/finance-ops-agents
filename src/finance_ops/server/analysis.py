@@ -61,6 +61,15 @@ def gap_message(cov: Coverage) -> str:
     )
 
 
+def billing_gap_message(invoice_id: str, cov: Coverage) -> str:
+    days = ", ".join(d.isoformat() for d in cov.gap_days)
+    return (
+        f"{invoice_id} was billed on metered usage with {len(cov.gap_days)} day(s) missing: "
+        f"{days}. Its credits and usage charge cover only the days with data; a drop in "
+        "credits there reflects missing data, not lower usage."
+    )
+
+
 def behind_message(covers_through: date, expected_through: date) -> str:
     return (
         f"The usage feed has data only through {covers_through.isoformat()} but should be "

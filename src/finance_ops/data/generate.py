@@ -7,6 +7,7 @@ from one seeded Random, consumed in a fixed order.
 """
 
 import argparse
+import os
 import random
 import sqlite3
 from contextlib import closing
@@ -315,15 +316,17 @@ def write_database(path: Path, seed: int = sc.DEFAULT_SEED) -> dict[str, int]:
     """Build the database at `path`, replacing any existing file. Returns row counts."""
     tables = build_tables(seed)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.unlink(missing_ok=True)
+    building = path.with_name(path.name + ".tmp")  # built aside, then swapped in atomically
+    building.unlink(missing_ok=True)
     schema = files("finance_ops.data").joinpath("schema.sql").read_text()
-    with closing(sqlite3.connect(path)) as conn, conn:
+    with closing(sqlite3.connect(building)) as conn, conn:
         conn.executescript(schema)
         for table, rows in tables.items():
             if rows:
                 placeholders = ", ".join("?" * len(rows[0]))
                 # Table names come from the dict above, never from input.
                 conn.executemany(f"INSERT INTO {table} VALUES ({placeholders})", rows)
+    os.replace(building, path)
     return {table: len(rows) for table, rows in tables.items()}
 
 
