@@ -51,11 +51,14 @@ jobs:
           for i in $(seq 1 30); do curl -fsS localhost:8080/healthz && exit 0; sleep 1; done
           docker logs mcp; exit 1
       - name: Runs as a non-root user
-        run: test "$(docker exec mcp id -u)" = "10001"
+        run: |
+          test "$(docker exec mcp id -u)" = "10001"
       - name: Smoke test (health, 401 without token, real tool call)
-        run: scripts/smoke_test.sh http://localhost:8080 "$TOKEN"
+        run: |
+          scripts/smoke_test.sh http://localhost:8080 "$TOKEN"
       - name: Tool call was written to the audit log
-        run: docker logs mcp 2>&1 | grep '"tool": "get_overdue_invoices"'
+        run: |
+          docker logs mcp 2>&1 | grep '"tool": "get_overdue_invoices"'
 
   secrets:
     name: Secret scan (full history)
