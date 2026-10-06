@@ -12,12 +12,12 @@ import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
 from importlib.resources import files
 from pathlib import Path
 
 from finance_ops.config import db_path
 from finance_ops.data import scenario as sc
+from finance_ops.rules import overage_charge_minor, round_minor
 
 WEEKDAY_FACTOR = 1.15
 WEEKEND_FACTOR = 0.62
@@ -58,16 +58,6 @@ def billed_months() -> list[date]:
         months.append(current)
         current = month_end(current) + timedelta(days=1)
     return months
-
-
-def round_minor(value: Decimal) -> int:
-    return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
-
-
-def overage_charge_minor(credits: int, plan: sc.Plan) -> int:
-    """Charge for credits above the plan's allowance, rounded half up to the minor unit."""
-    excess = max(0, credits - plan.included_credits)
-    return round_minor(Decimal(excess) * plan.overage_rate_minor_per_1k / 1000)
 
 
 def build_accounts(rng: random.Random) -> list[sc.AccountSpec]:
@@ -165,7 +155,11 @@ def build_invoices(specs: list[sc.AccountSpec], usage: dict[str, dict[date, int]
                     credits_billed=credits,
                     allowance_applied=rating_plan.included_credits,
                     overage_rate_applied_minor_per_1k=rating_plan.overage_rate_minor_per_1k,
-                    usage_charge_minor=overage_charge_minor(credits, rating_plan),
+                    usage_charge_minor=overage_charge_minor(
+                        credits,
+                        rating_plan.included_credits,
+                        rating_plan.overage_rate_minor_per_1k,
+                    ),
                 )
             )
     return invoices
@@ -276,68 +270,61 @@ def invoice_row(invoice: Invoice) -> tuple:
     )
 
 
-def write_database(path: Path, seed: int = sc.DEFAULT_SEED) -> dict[str, int]:
-    """Build the database at `path`, replacing any existing file. Returns row counts."""
+def build_tables(seed: int) -> dict[str, list[tuple]]:
+    """Every table's rows, in insertion order. All randomness happens here."""
     rng = random.Random(seed)
     specs = build_accounts(rng)
     accounts = account_rows(specs, rng)
     usage = generate_usage(specs, rng)
     invoices = build_invoices(specs, usage)
     payments, credit_notes = build_settlements(invoices, rng)
+    return {
+        "meta": meta_rows(seed),
+        "plans": [
+            (
+                p.plan_id,
+                p.name,
+                p.monthly_fee_minor,
+                p.included_credits,
+                p.overage_rate_minor_per_1k,
+            )
+            for p in sc.PLANS.values()
+        ],
+        "accounts": accounts,
+        "subscriptions": subscription_rows(specs),
+        "usage_daily": [
+            (account_id, day.isoformat(), credits)
+            for account_id, days in usage.items()
+            for day, credits in days.items()
+        ],
+        "invoices": [invoice_row(invoice) for invoice in invoices],
+        "payments": payments,
+        "credit_notes": credit_notes,
+        "fx_rates": [
+            (currency, str(rate), sc.FX_RATE_DATE.isoformat())
+            for currency, rate in sc.FX_TO_REPORTING.items()
+        ],
+        "feed_status": [
+            (feed, covers.isoformat(), expected.isoformat(), loaded)
+            for feed, (covers, expected, loaded) in sc.FEEDS.items()
+        ],
+    }
 
+
+def write_database(path: Path, seed: int = sc.DEFAULT_SEED) -> dict[str, int]:
+    """Build the database at `path`, replacing any existing file. Returns row counts."""
+    tables = build_tables(seed)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.unlink(missing_ok=True)
     schema = files("finance_ops.data").joinpath("schema.sql").read_text()
     with closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(schema)
-        conn.executemany("INSERT INTO meta VALUES (?, ?)", meta_rows(seed))
-        conn.executemany(
-            "INSERT INTO plans VALUES (?, ?, ?, ?, ?)",
-            [
-                (
-                    p.plan_id,
-                    p.name,
-                    p.monthly_fee_minor,
-                    p.included_credits,
-                    p.overage_rate_minor_per_1k,
-                )
-                for p in sc.PLANS.values()
-            ],
-        )
-        conn.executemany("INSERT INTO accounts VALUES (?, ?, ?, ?, ?, ?, ?, ?)", accounts)
-        conn.executemany(
-            "INSERT INTO subscriptions VALUES (?, ?, ?, ?, ?)", subscription_rows(specs)
-        )
-        conn.executemany(
-            "INSERT INTO usage_daily VALUES (?, ?, ?)",
-            [
-                (account_id, day.isoformat(), credits)
-                for account_id, days in usage.items()
-                for day, credits in days.items()
-            ],
-        )
-        conn.executemany(
-            "INSERT INTO invoices VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [invoice_row(invoice) for invoice in invoices],
-        )
-        conn.executemany("INSERT INTO payments VALUES (?, ?, ?, ?)", payments)
-        conn.executemany("INSERT INTO credit_notes VALUES (?, ?, ?, ?, ?)", credit_notes)
-        conn.executemany(
-            "INSERT INTO fx_rates VALUES (?, ?, ?)",
-            [
-                (currency, str(rate), sc.FX_RATE_DATE.isoformat())
-                for currency, rate in sc.FX_TO_REPORTING.items()
-            ],
-        )
-        conn.executemany(
-            "INSERT INTO feed_status VALUES (?, ?, ?, ?)",
-            [
-                (feed, covers.isoformat(), expected.isoformat(), loaded)
-                for feed, (covers, expected, loaded) in sc.FEEDS.items()
-            ],
-        )
-        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
-        return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
+        for table, rows in tables.items():
+            if rows:
+                placeholders = ", ".join("?" * len(rows[0]))
+                # Table names come from the dict above, never from input.
+                conn.executemany(f"INSERT INTO {table} VALUES ({placeholders})", rows)
+    return {table: len(rows) for table, rows in tables.items()}
 
 
 def main() -> None:

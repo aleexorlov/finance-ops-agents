@@ -6,7 +6,7 @@ BIN := $(VENV)/bin
 # and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
 
-.PHONY: help install lock data test lint format sweep clean
+.PHONY: help install lock data serve serve-http test lint format sweep clean
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -22,6 +22,12 @@ lock:  ## Regenerate requirements/*.txt from pyproject.toml
 
 data:  ## Generate the synthetic database (data/finance_ops.sqlite)
 	$(BIN)/python -m finance_ops.data.generate
+
+serve:  ## Run the MCP server over stdio (Agent A starts this itself)
+	$(BIN)/python -m finance_ops.server
+
+serve-http:  ## Run the MCP server over HTTP on :8080 (needs MCP_AUTH_TOKEN in the environment)
+	$(BIN)/python -m finance_ops.server --transport http --port 8080
 
 test:  ## Run the test suite (no API keys needed)
 	$(BIN)/pytest
