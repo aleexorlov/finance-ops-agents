@@ -6,9 +6,9 @@ from datetime import date
 
 from finance_ops.server.envelope import InvalidInput
 
-ACCOUNT_ID = re.compile(r"ACC-\d{4}")
-INVOICE_ID = re.compile(r"INV-\d{6}-\d{4}")
-MONTH = re.compile(r"(\d{4})-(0[1-9]|1[0-2])")
+ACCOUNT_ID = re.compile(r"ACC-\d{4}", re.ASCII)
+INVOICE_ID = re.compile(r"INV-\d{6}-\d{4}", re.ASCII)
+MONTH = re.compile(r"(20\d{2})-(0[1-9]|1[0-2])", re.ASCII)
 MAX_DAYS_OVERDUE = 3650
 
 
@@ -36,7 +36,9 @@ def month(raw: str) -> tuple[date, date]:
     """'2026-09' -> (first day, last day) of that month."""
     match = MONTH.fullmatch(str(raw).strip())
     if not match:
-        raise InvalidInput(f"month must be YYYY-MM, for example 2026-09; got {raw!r}.")
+        raise InvalidInput(
+            f"month must be YYYY-MM between 2000 and 2099, for example 2026-09; got {raw!r}."
+        )
     year, number = int(match.group(1)), int(match.group(2))
     return date(year, number, 1), date(year, number, calendar.monthrange(year, number)[1])
 

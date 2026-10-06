@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from pydantic import Field
+from pydantic import BeforeValidator, Field
 
 from finance_ops.rules import (
     days_between,
@@ -36,16 +36,27 @@ from finance_ops.server.views import (
     plan_view,
 )
 
-AccountId = Annotated[str, Field(description="Account ID, format ACC-1234, e.g. 'ACC-1007'.")]
-InvoiceId = Annotated[
-    str, Field(description="Invoice ID, format INV-YYYYMM-NNNN, e.g. 'INV-202609-1007'.")
+# Text arguments accept a number too (the model may send 1007 for an ID); validation.py
+# then decides whether the text is well formed. Integers are strict, so "60" or true
+# is rejected rather than silently coerced.
+AsText = BeforeValidator(lambda value: value if isinstance(value, str) else str(value))
+AccountId = Annotated[
+    str, AsText, Field(description="Account ID, format ACC-1234, e.g. 'ACC-1007'.")
 ]
-Month = Annotated[str, Field(description="Calendar month, format YYYY-MM, e.g. '2026-09'.")]
+InvoiceId = Annotated[
+    str, AsText, Field(description="Invoice ID, format INV-YYYYMM-NNNN, e.g. 'INV-202609-1007'.")
+]
+Month = Annotated[str, AsText, Field(description="Calendar month, format YYYY-MM, e.g. '2026-09'.")]
 NameQuery = Annotated[
-    str, Field(description="All or part of a company name, e.g. 'Kestrel' or 'Harbour Analytics'.")
+    str,
+    AsText,
+    Field(description="All or part of a company name, e.g. 'Kestrel' or 'Harbour Analytics'."),
 ]
 MinDays = Annotated[
-    int, Field(description="Only invoices at least this many days past due, 1-3650, e.g. 60.")
+    int,
+    Field(
+        strict=True, description="Only invoices at least this many days past due, 1-3650, e.g. 60."
+    ),
 ]
 
 

@@ -11,6 +11,7 @@ status is always one of:
 """
 
 import functools
+import logging
 from collections.abc import Callable, Iterable
 from typing import Any, Literal
 
@@ -39,10 +40,9 @@ class ToolProblem(Exception):
 
     status: Status = "error"
 
-    def __init__(self, message: str, data: dict[str, Any] | None = None) -> None:
+    def __init__(self, message: str) -> None:
         super().__init__(message)
         self.message = message
-        self.data = data
 
 
 class InvalidInput(ToolProblem):
@@ -53,14 +53,25 @@ class NotFound(ToolProblem):
     status: Status = "not_found"
 
 
+UNEXPECTED_FAILURE = "The tool failed unexpectedly. The details are in the server log."
+logger = logging.getLogger(__name__)
+
+
 def reports_problems(method: Callable[..., Envelope]) -> Callable[..., Envelope]:
-    """Turn a ToolProblem raised by a tool method into an envelope with that status."""
+    """Turn anything a tool method raises into an envelope.
+
+    A ToolProblem becomes its own status. Any other exception becomes "error" with a
+    generic message; the details go to the server log, never to the caller.
+    """
 
     @functools.wraps(method)
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Envelope:
         try:
             return method(self, *args, **kwargs)
         except ToolProblem as problem:
-            return envelope(problem.status, self.as_of, data=problem.data, message=problem.message)
+            return envelope(problem.status, self.as_of, message=problem.message)
+        except Exception:
+            logger.exception("Tool %s failed", method.__name__)
+            return envelope("error", self.as_of, message=UNEXPECTED_FAILURE)
 
     return wrapper
