@@ -113,10 +113,16 @@ class ElevenLabsClient:
         self._api_key = api_key
         self._base = base
 
+    def find_secret_id(self, name: str) -> str | None:
+        """The ID of an existing workspace secret with this name, so re-runs reuse it."""
+        listing = self.send(Request("GET", "/v1/convai/secrets", {}))
+        matches = [s["secret_id"] for s in listing.get("secrets", []) if s.get("name") == name]
+        return matches[0] if matches else None
+
     def send(self, request: Request) -> dict[str, Any]:
         http = urllib.request.Request(
             self._base + request.path,
-            data=json.dumps(request.body).encode(),
+            data=json.dumps(request.body).encode() if request.body else None,
             method=request.method,
             headers={"xi-api-key": self._api_key, "Content-Type": "application/json"},
         )

@@ -5,6 +5,9 @@
 
 Needs ELEVENLABS_API_KEY and MCP_AUTH_TOKEN in .env. Set ELEVENLABS_AGENT_ID and
 ELEVENLABS_MCP_SERVER_ID after the first run to update instead of creating again.
+ElevenLabs cannot change a registered server's URL, so when the tunnel URL changes,
+remove ELEVENLABS_MCP_SERVER_ID and re-run: a new server is registered and the agent
+is pointed at it. The token secret is reused by name rather than duplicated.
 """
 
 import argparse
@@ -16,6 +19,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from finance_ops.voice.elevenlabs import (
+    SECRET_NAME,
     ElevenLabsClient,
     agent_request,
     load_config,
@@ -59,7 +63,10 @@ def main() -> None:
         sys.exit("ELEVENLABS_API_KEY is not set in .env.")
     client = ElevenLabsClient(api_key)
     if not server_id:
-        secret_id = client.send(secret_request(token))["secret_id"]
+        # Reuse the secret from an earlier run rather than creating a duplicate.
+        secret_id = (
+            client.find_secret_id(SECRET_NAME) or client.send(secret_request(token))["secret_id"]
+        )
         server_id = client.send(mcp_server_request(url, secret_id, config.approval_policy))["id"]
         print(f"MCP server registered: ELEVENLABS_MCP_SERVER_ID={server_id}")
     result = client.send(agent_request(config, server_id, agent_id))
