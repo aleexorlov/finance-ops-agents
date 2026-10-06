@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+.env
+.env.*
+.sweep-terms
+.pytest_cache
+.ruff_cache
+**/__pycache__
+data
+runs
+tests
+eval
+docs
+voice_agent
