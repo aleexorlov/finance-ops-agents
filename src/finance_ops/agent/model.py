@@ -50,7 +50,7 @@ class ClaudeModel:
                 messages=messages,
             )
         except anthropic.APIError as exc:
-            raise ModelError(f"{type(exc).__name__}: {exc}") from exc
+            raise ModelError(_describe(exc)) from exc
         return _to_turn(response)
 
 
@@ -78,3 +78,14 @@ def _to_turn(response: Any) -> ModelTurn:
         ),
         content=tuple(content),
     )
+
+
+def _describe(exc: BaseException) -> str:
+    """The error and its root cause, e.g. 'APIConnectionError: Connection error. (cause: ...)'."""
+    root = exc
+    while root.__cause__ is not None or root.__context__ is not None:
+        root = root.__cause__ or root.__context__  # type: ignore[assignment]
+    message = f"{type(exc).__name__}: {exc}"
+    if root is not exc:
+        message += f" (cause: {type(root).__name__}: {str(root)[:200]})"
+    return message

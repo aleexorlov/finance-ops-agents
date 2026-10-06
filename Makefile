@@ -6,7 +6,7 @@ BIN := $(VENV)/bin
 # and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
 
-.PHONY: help install lock data serve serve-http smoke docker-build docker-run ask test lint format sweep clean
+.PHONY: help install lock data serve serve-http smoke docker-build docker-run ask eval eval-estimate test lint format sweep clean
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -58,3 +58,9 @@ sweep:  ## Pre-publish check for credentials and deny-listed terms
 clean:  ## Remove caches and generated data
 	rm -rf .pytest_cache .ruff_cache runs data/*.sqlite
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
+
+eval-estimate:  ## Estimate the cost of a full evaluation run (no API calls)
+	$(BIN)/python -m finance_ops.evals --estimate
+
+eval:  ## Run the known-answer evaluation (needs ANTHROPIC_API_KEY; see make eval-estimate)
+	$(BIN)/python -m finance_ops.evals --repeats 5
