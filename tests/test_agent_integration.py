@@ -3,6 +3,7 @@
 Exercises the subprocess, the MCP client and the JSON round trip without an API key.
 """
 
+import json
 from pathlib import Path
 
 import anyio
@@ -58,3 +59,24 @@ def test_settings_ignore_another_tools_base_url(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:9/somebody-elses-proxy")
     monkeypatch.delenv("FINANCE_OPS_ANTHROPIC_BASE_URL", raising=False)
     assert AgentSettings.from_env().base_url == DEFAULT_BASE_URL
+
+
+def test_quoting_the_overage_rate_and_its_unit_is_grounded(db_file: Path) -> None:
+    # Run 1 of the evaluation withheld 11 correct answers over this sentence: the
+    # tools gave the rate but the "1,000" only appeared in a field name.
+    from finance_ops.agent.grounding import unverified_figures
+    from finance_ops.server.db import Database
+    from finance_ops.server.tools import FinanceTools
+
+    tools = FinanceTools(Database(db_file))
+    sources = [
+        json.dumps(tools.get_usage("ACC-1010", "2026-09")),
+        json.dumps(tools.get_account("ACC-1005")),
+        json.dumps(tools.get_invoice("INV-202609-1007")),
+        json.dumps(tools.reconcile_invoice("INV-202609-1007")),
+    ]
+    answer = (
+        "Overage is GBP 0.80 per 1,000 credits; Enterprise is EUR 0.20 per 1,000 credits; "
+        "the invoice applied 0.50 per 1,000 instead of 0.30 per 1,000."
+    )
+    assert unverified_figures(answer, sources) == []

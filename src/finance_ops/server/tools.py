@@ -13,6 +13,7 @@ from typing import Annotated
 from pydantic import BeforeValidator, Field
 
 from finance_ops.rules import (
+    OVERAGE_UNIT_CREDITS,
     days_between,
     money,
     overage_charge_minor,
@@ -425,6 +426,7 @@ class FinanceTools:
             "differences": differences,
             "billed_minus_expected": money(diff_minor),
             "direction": direction,
+            "overage_rate_unit_credits": OVERAGE_UNIT_CREDITS,
             "metered_usage_coverage": cov.as_dict(),
         }
         summary = (

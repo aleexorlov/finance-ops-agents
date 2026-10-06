@@ -9,6 +9,9 @@ from decimal import ROUND_HALF_UP, Decimal
 
 AGEING_BUCKETS = ((30, "1-30 days"), (60, "31-60 days"), (90, "61-90 days"))
 OLDEST_BUCKET = "over 90 days"
+# Overage is priced per this many credits. Tools return it as a value, so an answer
+# saying "0.80 per 1,000 credits" is quoting the tools, not inventing a number.
+OVERAGE_UNIT_CREDITS = 1000
 BUCKET_ORDER = (*(label for _, label in AGEING_BUCKETS), OLDEST_BUCKET)
 
 
@@ -20,7 +23,7 @@ def round_minor(value: Decimal) -> int:
 def overage_charge_minor(credits: int, included_credits: int, rate_minor_per_1k: int) -> int:
     """Charge for credits above the allowance, in minor units."""
     excess = max(0, credits - included_credits)
-    return round_minor(Decimal(excess) * rate_minor_per_1k / 1000)
+    return round_minor(Decimal(excess) * rate_minor_per_1k / OVERAGE_UNIT_CREDITS)
 
 
 def to_reporting_minor(amount_minor: int, rate: Decimal) -> int:
