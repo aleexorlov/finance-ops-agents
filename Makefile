@@ -6,7 +6,7 @@ BIN := $(VENV)/bin
 # and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
 
-.PHONY: help install lock data serve serve-http smoke docker-build docker-run ask eval eval-estimate test lint format sweep clean
+.PHONY: help install lock data serve serve-http smoke docker-build docker-run ask eval eval-estimate voice-setup test lint format sweep clean
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -64,3 +64,6 @@ eval-estimate:  ## Estimate the cost of a full evaluation run (no API calls)
 
 eval:  ## Run the known-answer evaluation (needs ANTHROPIC_API_KEY; see make eval-estimate)
 	$(BIN)/python -m finance_ops.evals --repeats 5
+
+voice-setup:  ## Dry-run the ElevenAgents setup: make voice-setup URL=https://<public-host> (add APPLY=1 to send)
+	$(BIN)/python -m finance_ops.voice --mcp-url "$(URL)" $(if $(APPLY),--apply,)

@@ -1,0 +1,9 @@
+{
+  "name": "Finance ops voice assistant (synthetic data)",
+  "llm": "claude-sonnet-5-5",
+  "language": "en",
+  "first_message": "Hi, I can look up accounts, usage, invoices and overdue balances. The data is synthetic. What would you like to know?",
+  "max_duration_seconds": 300,
+  "approval_policy": "auto_approve_all",
+  "tags": ["portfolio", "synthetic-data"]
+}
