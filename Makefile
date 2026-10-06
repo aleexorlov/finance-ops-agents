@@ -6,7 +6,7 @@ BIN := $(VENV)/bin
 # and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
 
-.PHONY: help install lock data serve serve-http test lint format sweep clean
+.PHONY: help install lock data serve serve-http ask test lint format sweep clean
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -28,6 +28,9 @@ serve:  ## Run the MCP server over stdio (Agent A starts this itself)
 
 serve-http:  ## Run the MCP server over HTTP on :8080 (needs MCP_AUTH_TOKEN in the environment)
 	$(BIN)/python -m finance_ops.server --transport http --port 8080
+
+ask:  ## Ask Agent A a question: make ask Q="Why did Kestrel Robotics' September invoice go up?"
+	$(BIN)/python -m finance_ops.agent --trace "$(Q)"
 
 test:  ## Run the test suite (no API keys needed)
 	$(BIN)/pytest
