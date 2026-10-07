@@ -6,7 +6,7 @@ BIN := $(VENV)/bin
 # and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
 
-.PHONY: help install lock data serve serve-http smoke docker-build docker-run ask eval eval-estimate voice-setup tunnel test lint format sweep clean
+.PHONY: help install lock data serve serve-http smoke docker-build docker-run ask eval eval-estimate voice-setup voice-audit tunnel test lint format sweep clean
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -26,8 +26,9 @@ data:  ## Generate the synthetic database (data/finance_ops.sqlite)
 serve:  ## Run the MCP server over stdio (Agent A starts this itself)
 	$(BIN)/python -m finance_ops.server
 
-serve-http:  ## Run the MCP server over HTTP on :8080 (needs MCP_AUTH_TOKEN in the environment)
-	$(BIN)/python -m finance_ops.server --transport http --port 8080
+serve-http:  ## Run the MCP server over HTTP on :8080 (token from the environment or .env)
+	MCP_AUTH_TOKEN="$${MCP_AUTH_TOKEN:-$$(grep -E '^MCP_AUTH_TOKEN=' .env | cut -d= -f2-)}" \
+		$(BIN)/python -m finance_ops.server --transport http --port 8080
 
 smoke:  ## Smoke-test a running HTTP server: make smoke URL=http://localhost:8080 (uses MCP_AUTH_TOKEN)
 	scripts/smoke_test.sh "$(or $(URL),http://localhost:8080)" "$$MCP_AUTH_TOKEN"
@@ -70,3 +71,6 @@ voice-setup:  ## Dry-run the ElevenAgents setup: make voice-setup URL=https://<p
 
 tunnel:  ## Serve the MCP server publicly through a temporary Cloudflare tunnel (Ctrl+C stops it)
 	scripts/tunnel.sh
+
+voice-audit:  ## Figure-check the voice agent's latest call against its tool results
+	$(BIN)/python -m finance_ops.voice.audit
