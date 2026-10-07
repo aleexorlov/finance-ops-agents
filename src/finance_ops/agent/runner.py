@@ -16,7 +16,7 @@ from finance_ops.agent.loop import DEFAULT_MAX_TURNS, run_agent
 from finance_ops.agent.model import DEFAULT_BASE_URL, DEFAULT_MODEL, ClaudeModel, ModelClient
 from finance_ops.agent.types import RunResult
 
-RUNS_DIR = Path("runs")
+RUNS_DIR = Path(__file__).resolve().parents[3] / "runs"
 
 
 @dataclass(frozen=True)

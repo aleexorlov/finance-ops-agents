@@ -4,7 +4,9 @@
 #   2. credential-shaped strings in any commit in history;
 #   3. a tracked .env file;
 #   4. any term from .sweep-terms (a local deny-list that is never committed)
-#      in tracked files, history, commit messages or author metadata.
+#      in tracked files, history, commit messages or author metadata;
+#   5. any key, token or ID value from the local .env, as an exact string, since
+#      a random token has no shape a pattern could recognise.
 # Credential hits are reported by file or commit only, never printed.
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -39,6 +41,18 @@ else
   git grep -nE -f .sweep-terms -- . && fail "term in tracked files"
   git log --all -p --no-color --format='commit %h%nauthor %an <%ae>%n%B' \
     | grep -nE -f .sweep-terms && fail "term in history or commit metadata"
+fi
+
+echo "5. Values from .env in tree and history"
+if [[ -f .env ]]; then
+  values=$(grep -E '^[A-Z_]*(KEY|TOKEN|_ID)=.{8,}' .env | cut -d= -f2- || true)
+  if [[ -n "$values" ]]; then
+    git grep -qF -f <(printf '%s\n' "$values") -- . && fail "a .env value is in tracked files"
+    git log --all -p --no-color --format='%B' | grep -qF -f <(printf '%s\n' "$values") \
+      && fail "a .env value is in history or commit messages"
+  fi
+else
+  echo "  (no .env, skipped)"
 fi
 
 if ((failed)); then

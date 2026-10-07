@@ -119,3 +119,14 @@ def test_every_tool_call_and_the_outcome_are_logged() -> None:
 def test_max_turns_must_be_positive() -> None:
     with pytest.raises(ValueError, match="max_turns"):
         run("?", ScriptedModel(final_turn("x")), FakeTools(), max_turns=0)
+
+
+def test_a_tool_server_that_cannot_list_its_tools_ends_the_run_cleanly() -> None:
+    class Unreachable(FakeTools):
+        async def list_tools(self) -> list:
+            raise ConnectionError("server did not start")
+
+    log = ListLog()
+    result = run("?", ScriptedModel(final_turn("x")), Unreachable(), log=log)
+    assert result.status == "tool_error"
+    assert log.events[-1]["event"] == "run_finished"

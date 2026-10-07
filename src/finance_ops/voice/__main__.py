@@ -5,9 +5,9 @@
 
 Needs ELEVENLABS_API_KEY and MCP_AUTH_TOKEN in .env. Set ELEVENLABS_AGENT_ID and
 ELEVENLABS_MCP_SERVER_ID after the first run to update instead of creating again.
-ElevenLabs cannot change a registered server's URL, so when the tunnel URL changes,
-remove ELEVENLABS_MCP_SERVER_ID and re-run: a new server is registered and the agent
-is pointed at it. The token secret is reused by name rather than duplicated.
+ElevenLabs cannot change a registered server's URL, so when the URL has changed (a
+new tunnel), a new server is registered and the agent is pointed at it. The token's
+secret is reused while the token is unchanged.
 """
 
 import argparse
@@ -19,13 +19,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from finance_ops.voice.elevenlabs import (
-    SECRET_NAME,
     ElevenLabsClient,
     agent_request,
     load_config,
     mcp_endpoint,
     mcp_server_request,
     redact,
+    secret_name,
     secret_request,
 )
 
@@ -62,17 +62,21 @@ def main() -> None:
     if not api_key:
         sys.exit("ELEVENLABS_API_KEY is not set in .env.")
     client = ElevenLabsClient(api_key)
+    if server_id and client.server_url(server_id) != url:
+        print(f"Registered server {server_id} points elsewhere; registering one for {url}.")
+        server_id = None
     if not server_id:
-        # Reuse the secret from an earlier run rather than creating a duplicate.
+        # Reuse the secret for this token if an earlier run stored it.
         secret_id = (
-            client.find_secret_id(SECRET_NAME) or client.send(secret_request(token))["secret_id"]
+            client.find_secret_id(secret_name(token))
+            or client.send(secret_request(token))["secret_id"]
         )
         server_id = client.send(mcp_server_request(url, secret_id, config.approval_policy))["id"]
         print(f"MCP server registered: ELEVENLABS_MCP_SERVER_ID={server_id}")
     result = client.send(agent_request(config, server_id, agent_id))
     agent_id = agent_id or result["agent_id"]
     print(f"Agent ready: ELEVENLABS_AGENT_ID={agent_id}")
-    print("Add both IDs to .env so the next run updates rather than creates.")
+    print("Keep both IDs in .env so the next run updates rather than creates.")
 
 
 if __name__ == "__main__":

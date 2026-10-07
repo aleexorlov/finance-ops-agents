@@ -19,6 +19,11 @@
 # failing_tools        these tools are forced to fail for the case
 # max_turns            overrides the step cap
 # tag                  groups cases when results are compared with docs/scope.md
+#
+# Known gaps of rule-based grading (left as limitations, not over-fitted):
+# - a correct verdict with a wrongly stated cause can pass (misbilled-invoice);
+# - an answer that cites the wrong month for context can pass (overage);
+# - the step-cap case checks the loop's behaviour, not where the agent was heading.
 
 [[case]]
 id = "plan-lookup"
@@ -52,7 +57,7 @@ evidence = [
 [[case]]
 id = "invoice-jump"
 tag = "investigation"
-checks = "Explains an invoice increase: a plan upgrade plus a billing error it finds itself"
+checks = "Explains an invoice increase: the plan upgrade, plus a billing error found by reconciling (the prompt says to reconcile the later invoice)"
 question = "Why did Kestrel Robotics' September invoice go up so much compared with August?"
 expect_status = ["answered"]
 figures = ["1637.36"]
@@ -127,6 +132,9 @@ any_of = [
   ["stale", "behind", "incomplete", "only through", "only up to", "only runs", "stops at", "not yet loaded", "not loaded", "delayed", "lag", "missing", "partial", "not complete", "out of date", "not up to date"],
   ["credit"],
 ]
+# Found by reading run 2's answers: claiming usage on the missing days is higher is
+# speculation the data does not support.
+none_match = ['(true|actual|real)\s+(total|usage|figure)s?\s+(is|are|will be|would be)\s+higher', 'higher than (the )?recorded', '(should|will) rise']
 evidence = [
   { tool = "get_usage", args = { account_id = "ACC-1002", month = "2026-10" }, path = "status", value = "stale" },
   { tool = "get_usage", args = { account_id = "ACC-1002", month = "2026-10" }, path = "data.credits_recorded", value = "168089" },
@@ -230,7 +238,7 @@ evidence = [
 [[case]]
 id = "step-cap"
 tag = "step-cap"
-checks = "Stops at a step cap set too low to finish, and lists what it did not resolve"
+checks = "Loop behaviour: stops at a step cap set too low to finish and lists what it did not resolve"
 question = "Why did Kestrel Robotics' September invoice go up so much compared with August?"
 expect_status = ["step_cap_reached"]
 max_turns = 2

@@ -57,7 +57,7 @@ def gap_message(cov: Coverage) -> str:
     return (
         f"No usage was recorded on {len(cov.gap_days)} day(s) that should have data: {days}. "
         "Totals cover only the days with data. Treat the shortfall as missing data, not as "
-        "lower usage; it cannot be estimated from this data."
+        "lower usage; usage on those days is unknown and cannot be estimated from this data."
     )
 
 
@@ -70,12 +70,19 @@ def billing_gap_message(invoice_id: str, cov: Coverage) -> str:
     )
 
 
-def behind_message(covers_through: date, expected_through: date) -> str:
-    return (
-        f"The usage feed has data only through {covers_through.isoformat()} but should be "
-        f"complete through {expected_through.isoformat()}. Totals stop at "
-        f"{covers_through.isoformat()} and are incomplete."
+def behind_message(feed: str, covers_through: date, expected_through: date) -> str:
+    message = (
+        f"The {feed} feed has data only through {covers_through.isoformat()} but should be "
+        f"complete through {expected_through.isoformat()}."
     )
+    if feed == "usage":
+        message += (
+            f" Totals stop at {covers_through.isoformat()} and are incomplete; usage on the "
+            "later days is unknown, so do not say whether it is higher or lower."
+        )
+    elif feed == "payments":
+        message += " Recent payments may be missing, so balances may be overstated."
+    return message
 
 
 def usage_status(
@@ -84,7 +91,7 @@ def usage_status(
     """Status and message for a usage window: stale beats partial beats ok."""
     messages = [gap_message(cov)] if cov.gap_days else []
     if cov.behind_days:
-        messages.append(behind_message(covers_through, expected_through))
+        messages.append(behind_message("usage", covers_through, expected_through))
     status: Status = "stale" if cov.behind_days else "partial" if cov.gap_days else "ok"
     return status, " ".join(messages) or None
 

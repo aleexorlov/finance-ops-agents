@@ -25,7 +25,7 @@ def main() -> None:
     parser.add_argument("--trace", action="store_true", help="list every tool call")
     args = parser.parse_args()
 
-    load_dotenv()
+    load_dotenv(Path(__file__).resolve().parents[3] / ".env")
     settings = AgentSettings.from_env()
     if not settings.api_key:
         sys.exit("ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add a key.")

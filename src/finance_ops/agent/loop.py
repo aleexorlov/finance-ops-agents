@@ -1,7 +1,8 @@
 """Agent A's orchestration loop: model and tools, written by hand.
 
 The loop, not the model, decides how a run ended:
-- if any tool failed, the run is "tool_error", whatever the model's answer says;
+- if any tool failed, the run can never end as "answered": it is "tool_error", unless
+  the answer was withheld or the run stopped for another reason first;
 - if the answer contains a figure no tool returned, the answer is withheld;
 - if the step cap is reached, the run stops and lists what it did not resolve;
 - partial or stale data is attached to the result as warnings, whether or not
@@ -135,7 +136,11 @@ async def run_agent(
         raise ValueError("max_turns must be at least 1")
     run = _Run(question, tools, log or NullRunLog(), run_id or uuid4().hex[:12])
     run.log.event("run_started", run_id=run.run_id, question=question, max_turns=max_turns)
-    specs = await tools.list_tools()
+    try:
+        specs = await tools.list_tools()
+    except Exception as exc:  # the tool server did not start or answer
+        run.tool_errors.append(f"list_tools: {type(exc).__name__}")
+        return run.finish("tool_error", error=f"Could not list tools: {type(exc).__name__}")
     status = await run.execute(ToolCall("orchestrator-0", STATUS_TOOL, {}), turn=0)
     system = build_system_prompt(status.payload or {})
     messages: list[dict[str, Any]] = [{"role": "user", "content": question}]

@@ -8,6 +8,7 @@ results recorded in the same call (and the caller's own words) as the sources.
 
     python -m finance_ops.voice.audit                     # latest call to the agent
     python -m finance_ops.voice.audit --conversation-id conv_...
+    python -m finance_ops.voice.audit --save           # also write voice_agent/calls/<time>.md
 """
 
 import argparse
@@ -15,6 +16,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -89,9 +91,10 @@ def audit_transcript(transcript: list[dict[str, Any]]) -> CallAudit:
     return CallAudit(tuple(checks), tool_calls)
 
 
-def fetch_transcript(
+def fetch_call(
     client: ElevenLabsClient, agent_id: str, conversation_id: str | None
-) -> tuple[str, list[dict[str, Any]]]:
+) -> tuple[str, dict[str, Any]]:
+    """A call's details from ElevenLabs: the latest call to the agent unless one is named."""
     if conversation_id is None:
         listing = client.send(
             Request("GET", f"/v1/convai/conversations?agent_id={agent_id}&page_size=1", {})
@@ -100,23 +103,63 @@ def fetch_transcript(
         if not conversations:
             sys.exit("No conversations found for this agent yet.")
         conversation_id = conversations[0]["conversation_id"]
-    detail = client.send(Request("GET", f"/v1/convai/conversations/{conversation_id}", {}))
-    return conversation_id, detail.get("transcript") or []
+    return conversation_id, client.send(
+        Request("GET", f"/v1/convai/conversations/{conversation_id}", {})
+    )
+
+
+def render_report(detail: dict[str, Any], audit: CallAudit) -> str:
+    """A markdown record of the call and its audit, without account or conversation IDs."""
+    meta = detail.get("metadata") or {}
+    started = datetime.fromtimestamp(meta.get("start_time_unix_secs", 0), UTC)
+    lines = [
+        f"# Voice call audit, {started:%Y-%m-%d %H:%M} UTC",
+        "",
+        f"Duration {meta.get('call_duration_secs', '?')} s. Tools called: "
+        f"{', '.join(audit.tool_calls) or 'none'}. {audit.figures_checked} figures checked; "
+        f"{len(audit.unverified)} not found in the call's tool results"
+        + (f": {', '.join(audit.unverified)}." if audit.unverified else "."),
+        "",
+        "Produced by `python -m finance_ops.voice.audit --save`. The data is synthetic.",
+        "",
+        "## Transcript",
+        "",
+    ]
+    for turn in detail.get("transcript") or []:
+        text = EXPRESSIVE_TAG.sub("", turn.get("original_message") or turn.get("message") or "")
+        calls = [c.get("tool_name", "").split("_", 1)[-1] for c in turn.get("tool_calls") or []]
+        if text.strip():
+            lines.append(f"- **{turn.get('role')}**: {text.strip()}")
+        elif calls:
+            lines.append(f"- *calls {', '.join(calls)}*")
+    lines += [
+        "",
+        "## Figures",
+        "",
+        "| Agent said | Read as | Not found in tool results |",
+        "|---|---|---|",
+    ]
+    for turn in audit.turns:
+        if turn.figures:
+            lines.append(
+                f"| {turn.said[:90]}... | {', '.join(turn.figures)} | "
+                f"{', '.join(turn.unverified) or 'none'} |"
+            )
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Figure-check a finished voice call.")
     parser.add_argument("--conversation-id", help="default: the agent's latest call")
+    parser.add_argument("--save", action="store_true", help="write a report to voice_agent/calls/")
     args = parser.parse_args()
     load_dotenv(REPO / ".env")
     api_key = os.environ.get("ELEVENLABS_API_KEY", "")
     agent_id = os.environ.get("ELEVENLABS_AGENT_ID", "")
     if not (api_key and agent_id):
         sys.exit("Set ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID in .env.")
-    conversation_id, transcript = fetch_transcript(
-        ElevenLabsClient(api_key), agent_id, args.conversation_id
-    )
-    audit = audit_transcript(transcript)
+    conversation_id, detail = fetch_call(ElevenLabsClient(api_key), agent_id, args.conversation_id)
+    audit = audit_transcript(detail.get("transcript") or [])
     print(
         f"Call {conversation_id}: {len(audit.turns)} agent turns, tools used: "
         f"{', '.join(audit.tool_calls) or 'none'}"
@@ -129,6 +172,17 @@ def main() -> None:
         f"{audit.figures_checked} figures checked, {len(audit.unverified)} not found "
         "in the call's tool results."
     )
+    if args.save:
+        started = (detail.get("metadata") or {}).get("start_time_unix_secs", 0)
+        path = (
+            REPO
+            / "voice_agent"
+            / "calls"
+            / f"{datetime.fromtimestamp(started, UTC):%Y%m%dT%H%MZ}.md"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(render_report(detail, audit), encoding="utf-8")
+        print(f"Report written to {path.relative_to(REPO)}")
     sys.exit(1 if audit.unverified else 0)
 
 

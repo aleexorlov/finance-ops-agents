@@ -40,6 +40,8 @@ def words_to_number(phrase: str) -> str:
     words = [w for w in re.split(r"[\s-]+", whole) if w and w != "and"]
     if "oh" in words:  # an ID read digit by digit: "ten oh seven" is 1007, not 17
         return "".join(str(UNITS.get(w, TENS.get(w, ""))) for w in words)
+    if not any(w in SCALES for w in words) and len(groups := _pairs(words)) > 1:
+        return "".join(str(g) for g in groups)  # read in pairs: "twenty twenty-six" is 2026
     total, current = 0, 0
     for word in words:
         if word in UNITS:
@@ -55,6 +57,20 @@ def words_to_number(phrase: str) -> str:
     if decimals:
         number += "." + "".join(str(UNITS.get(w, "")) for w in decimals.split())
     return number
+
+
+def _pairs(words: list[str]) -> list[int]:
+    """Split number words into sub-hundred groups: ["twenty", "twenty", "six"] -> [20, 26]."""
+    groups: list[int] = []
+    for word in words:
+        value = UNITS.get(word, TENS.get(word))
+        if value is None:
+            continue
+        if groups and groups[-1] in TENS.values() and word in UNITS and 0 < value < 10:
+            groups[-1] += value  # "twenty" then "six" is one group, 26
+        else:
+            groups.append(value)
+    return groups
 
 
 def to_digits(text: str) -> str:

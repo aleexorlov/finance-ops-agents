@@ -11,6 +11,7 @@ Nothing is sent unless --apply is given; without it the requests are printed wit
 the token redacted.
 """
 
+import hashlib
 import json
 import urllib.error
 import urllib.request
@@ -19,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 API_BASE = "https://api.elevenlabs.io"
-SECRET_NAME = "finance-ops-mcp-token"
+SECRET_PREFIX = "finance-ops-mcp-token"
 MCP_SERVER_NAME = "finance-ops (read-only billing tools)"
 MCP_SERVER_DESCRIPTION = (
     "Read-only tools over a synthetic billing dataset: accounts, usage, invoices, "
@@ -61,9 +62,15 @@ def mcp_endpoint(base_url: str) -> str:
     return url if url.endswith("/mcp") else f"{url}/mcp"
 
 
+def secret_name(token: str) -> str:
+    """Name the secret after a fingerprint of the token, so a rotated token gets a new
+    secret instead of silently reusing the old one. The fingerprint reveals nothing."""
+    return f"{SECRET_PREFIX}-{hashlib.sha256(token.encode()).hexdigest()[:8]}"
+
+
 def secret_request(token: str) -> Request:
     return Request(
-        "POST", "/v1/convai/secrets", {"type": "new", "name": SECRET_NAME, "value": token}
+        "POST", "/v1/convai/secrets", {"type": "new", "name": secret_name(token), "value": token}
     )
 
 
@@ -118,6 +125,11 @@ class ElevenLabsClient:
         listing = self.send(Request("GET", "/v1/convai/secrets", {}))
         matches = [s["secret_id"] for s in listing.get("secrets", []) if s.get("name") == name]
         return matches[0] if matches else None
+
+    def server_url(self, server_id: str) -> str | None:
+        """The URL an already registered MCP server points at."""
+        server = self.send(Request("GET", f"/v1/convai/mcp-servers/{server_id}", {}))
+        return server.get("config", {}).get("url")
 
     def send(self, request: Request) -> dict[str, Any]:
         http = urllib.request.Request(

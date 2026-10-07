@@ -47,6 +47,7 @@ def test_every_expected_figure_is_backed_by_evidence(case: Case) -> None:
     backed = {e.value for e in case.evidence}
     assert set(case.figures) <= backed
     assert set(case.any_figure) <= backed
+    assert set(case.all_or_none_figures) <= backed
 
 
 @pytest.mark.parametrize(
@@ -234,6 +235,11 @@ def test_correct_answers_the_first_rules_failed_now_pass(case_id: str, answer: s
         (
             "unknown-account",
             "ACC-9999 does not exist: it is a placeholder ID used for test accounts.",
+        ),
+        (
+            "stale-feed",
+            "Usage data is stale: 168,089 credits through 1 October. Actual usage is higher "
+            "than the recorded figure.",
         ),
     ],
 )

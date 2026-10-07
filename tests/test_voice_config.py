@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from finance_ops.agent.model import DEFAULT_MODEL
 from finance_ops.voice.elevenlabs import (
     REDACTED,
     agent_request,
@@ -12,6 +13,7 @@ from finance_ops.voice.elevenlabs import (
     mcp_endpoint,
     mcp_server_request,
     redact,
+    secret_name,
     secret_request,
 )
 
@@ -19,8 +21,8 @@ VOICE_DIR = Path(__file__).resolve().parents[1] / "voice_agent"
 CONFIG = load_config(VOICE_DIR)
 
 
-def test_config_loads_and_uses_the_same_model_family_as_agent_a() -> None:
-    assert CONFIG.llm == "claude-sonnet-5-5"
+def test_config_loads_and_uses_the_same_model_as_agent_a() -> None:
+    assert CONFIG.llm == DEFAULT_MODEL
     assert "Never calculate" in CONFIG.prompt
     assert "Never choose for them" in CONFIG.prompt
 
@@ -56,3 +58,9 @@ def test_dry_run_output_never_contains_the_token() -> None:
     printed = json.dumps(redact(secret_request("super-secret-token")))
     assert "super-secret-token" not in printed
     assert REDACTED in printed
+
+
+def test_secret_name_is_a_fingerprint_that_changes_with_the_token() -> None:
+    first, second = secret_name("token-one"), secret_name("token-two")
+    assert first.startswith("finance-ops-mcp-token-") and first != second
+    assert "token-one" not in first

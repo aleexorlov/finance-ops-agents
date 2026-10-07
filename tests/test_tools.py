@@ -313,3 +313,16 @@ def test_stale_beats_partial_when_both_apply() -> None:
     status, message = usage_status(cov, date(2026, 10, 2), date(2026, 10, 4))
     assert status == "stale"
     assert "2026-10-02" in message and "missing data" in message
+
+
+def test_data_status_names_the_feed_that_is_behind(stale_payments_tools: FinanceTools) -> None:
+    warnings = stale_payments_tools.get_data_status()["warnings"]
+    assert any(w.startswith("The payments feed") for w in warnings)
+    assert any(w.startswith("The usage feed") for w in warnings)
+
+
+def test_usage_for_an_account_without_a_subscription_is_not_found(
+    tools: FinanceTools, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("finance_ops.server.queries.plan_history", lambda conn, account_id: [])
+    assert_envelope(tools.get_usage("ACC-1007", "2026-09"), "not_found")

@@ -26,6 +26,8 @@ from finance_ops.voice.spoken import to_digits
             "4274720 credits",
         ),
         ("invoice ending ten oh seven", "invoice ending 1007"),  # an ID read digit by digit
+        ("account ten twelve", "account 1012"),  # read in pairs, not added up to 22
+        ("in twenty twenty-six", "in 2026"),
     ],
 )
 def test_spoken_numbers_become_digits(spoken: str, digits: str) -> None:

@@ -10,6 +10,7 @@ from typing import Any
 import anyio
 
 from finance_ops.agent.executor import ToolExecutor
+from finance_ops.agent.loop import DEFAULT_MAX_TURNS
 from finance_ops.agent.model import ModelClient
 from finance_ops.agent.runner import ask
 from finance_ops.agent.types import TokenUsage, ToolOutcome, ToolSpec
@@ -89,7 +90,12 @@ async def run_once(
         return FailingTools(executor, case.failing_tools) if case.failing_tools else executor
 
     result, log_path = await ask(
-        case.question, model, database, case.max_turns or 8, runs_dir, wrap_tools=wrap
+        case.question,
+        model,
+        database,
+        case.max_turns or DEFAULT_MAX_TURNS,
+        runs_dir,
+        wrap_tools=wrap,
     )
     graded = grade(case, result)
     return RunRecord(
@@ -122,7 +128,10 @@ async def run_all(
 
     async def one(case: Case, repeat: int) -> None:
         async with limiter:
-            record = await run_once(case, repeat, model, model_name, database, runs_dir)
+            try:
+                record = await run_once(case, repeat, model, model_name, database, runs_dir)
+            except Exception as exc:  # e.g. the tool server failed to start
+                record = failed_record(case, repeat, exc)
             records.append(record)
             print(f"  {case.id} #{repeat}: {record.bucket} ({record.status})", flush=True)
 
@@ -131,6 +140,24 @@ async def run_all(
             for repeat in range(1, repeats + 1):
                 group.start_soon(one, case, repeat)
     return sorted(records, key=lambda r: (r.case_id, r.repeat))
+
+
+def failed_record(case: Case, repeat: int, exc: Exception) -> RunRecord:
+    """A run that crashed before it produced a result, recorded rather than lost."""
+    return RunRecord(
+        case_id=case.id,
+        repeat=repeat,
+        status="model_error",
+        bucket="error",
+        failures=(f"{type(exc).__name__}: {str(exc)[:200]}",),
+        turns=0,
+        tool_calls=(),
+        usage=TokenUsage(),
+        cost_usd=0.0,
+        seconds=0.0,
+        answer=None,
+        log_path="",
+    )
 
 
 def save_records(records: list[RunRecord], path: Path, meta: dict[str, Any]) -> None:

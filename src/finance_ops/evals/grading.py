@@ -8,7 +8,8 @@ A run lands in exactly one bucket:
                      or a forbidden claim was present
   unexpected_status  the run ended some other way (for example withheld for an
                      unverified figure, or stopped at the step cap)
-  error              the model API failed
+  error              the model API failed, or returned an unusable reply (for example
+                     one cut off at the output limit), or the run crashed
 
 The rules were tested adversarially before the first full run: reviewers wrote
 correct answers in varied styles and wrong answers a flawed agent might give,

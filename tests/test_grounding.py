@@ -52,3 +52,39 @@ def test_small_counts_with_a_currency_symbol_are_still_checked() -> None:
 
 def test_figures_from_the_question_are_allowed() -> None:
     assert unverified_figures("Invoices more than 60 days overdue:", ["", "over 60 days?"]) == []
+
+
+# --- from the pre-publication review -----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "The fee is £2000.",
+        "EUR 2050 a month",
+        "overbilled by £1999.",
+        "You owe 12 pounds.",
+        "1,355.32GBP is due",
+        "about £2k",
+    ],
+)
+def test_amounts_with_currency_are_checked_even_when_they_look_like_years_or_counts(
+    answer: str,
+) -> None:
+    assert unverified_figures(answer, ['{"total":"1281.05"}']) != []
+
+
+def test_ids_and_dates_in_tool_output_do_not_ground_an_amount() -> None:
+    source = '{"invoice_id":"INV-202609-1007","due_on":"2026-10-31","total":"2636.36"}'
+    assert unverified_figures("overbilled by £1,007.00 or £202,609", [source]) == [
+        "£1,007.00",
+        "£202,609",
+    ]
+
+
+def test_a_comma_grouped_figure_after_a_month_is_not_a_date() -> None:
+    assert unverified_figures("Over in September 65,969 credits", ['{"over":65969}']) == []
+
+
+def test_a_comma_grouped_figure_from_the_question_is_allowed() -> None:
+    assert unverified_figures("You asked about 65,969 credits.", ["about 65,969 credits?"]) == []
