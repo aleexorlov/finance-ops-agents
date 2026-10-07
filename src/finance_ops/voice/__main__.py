@@ -16,7 +16,7 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 
 from finance_ops.voice.elevenlabs import (
     ElevenLabsClient,
@@ -72,11 +72,13 @@ def main() -> None:
             or client.send(secret_request(token))["secret_id"]
         )
         server_id = client.send(mcp_server_request(url, secret_id, config.approval_policy))["id"]
-        print(f"MCP server registered: ELEVENLABS_MCP_SERVER_ID={server_id}")
+        set_key(REPO / ".env", "ELEVENLABS_MCP_SERVER_ID", server_id, quote_mode="never")
+        print(f"MCP server registered for {url}; its ID is saved in .env.")
     result = client.send(agent_request(config, server_id, agent_id))
-    agent_id = agent_id or result["agent_id"]
-    print(f"Agent ready: ELEVENLABS_AGENT_ID={agent_id}")
-    print("Keep both IDs in .env so the next run updates rather than creates.")
+    if not agent_id:
+        agent_id = result["agent_id"]
+        set_key(REPO / ".env", "ELEVENLABS_AGENT_ID", agent_id, quote_mode="never")
+    print("Voice agent updated: it now uses this server. IDs are kept in .env.")
 
 
 if __name__ == "__main__":

@@ -172,6 +172,11 @@ def graded(case_id: str, answer: str) -> str:
     ("case_id", "answer"),
     [
         (
+            "plan-lookup",
+            "Marlow Health is on the Enterprise plan at EUR 4,000.00 a month. I have not "
+            "converted the fee to GBP.",
+        ),
+        (
             "misbilled-invoice",
             "No. INV-202609-1007 does not match metered usage: it was billed "
             "£1,637.36 more than the £999.00 recomputed on the Scale plan.",
@@ -210,6 +215,10 @@ def test_correct_answers_the_first_rules_failed_now_pass(case_id: str, answer: s
 @pytest.mark.parametrize(
     ("case_id", "answer"),
     [
+        (
+            "plan-lookup",
+            "Marlow Health is on Enterprise at £4,000 a month.",
+        ),
         (
             "usage-gap",
             "September usage fell to 1,062,985 credits. This is not a data gap; demand "

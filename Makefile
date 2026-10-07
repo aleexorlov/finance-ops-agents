@@ -6,7 +6,7 @@ BIN := $(VENV)/bin
 # and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
 
-.PHONY: help install lock data serve serve-http smoke docker-build docker-run ask eval eval-estimate voice-setup voice-audit tunnel test lint format sweep clean
+.PHONY: help install lock data serve serve-http smoke docker-build docker-run ask eval eval-estimate voice-setup voice-audit voice-live tunnel test lint format sweep clean
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -74,3 +74,6 @@ tunnel:  ## Serve the MCP server publicly through a temporary Cloudflare tunnel 
 
 voice-audit:  ## Figure-check the voice agent's latest call against its tool results
 	$(BIN)/python -m finance_ops.voice.audit
+
+voice-live:  ## Start the server and a tunnel, then point the voice agent at it (Ctrl+C stops)
+	VOICE=1 scripts/tunnel.sh

@@ -88,3 +88,17 @@ def test_a_comma_grouped_figure_after_a_month_is_not_a_date() -> None:
 
 def test_a_comma_grouped_figure_from_the_question_is_allowed() -> None:
     assert unverified_figures("You asked about 65,969 credits.", ["about 65,969 credits?"]) == []
+
+
+# --- from evaluation run 3, which caught regressions in the stricter check --------------
+
+
+def test_a_one_digit_scaled_unit_counts_when_it_equals_a_tool_value() -> None:
+    sources = ['{"overage_rate_per_1k_credits":"0.50","overage_rate_unit_credits":1000}']
+    assert unverified_figures("0.50 GBP per 1k credits", sources) == []
+    assert unverified_figures("about £2k", sources) == ["£2k"]
+
+
+def test_short_dates_are_not_figures() -> None:
+    answer = "No usage on 2026-09-21, 09-22 and 09-23."
+    assert unverified_figures(answer, ['{"missing_dates":["2026-09-21"]}']) == []

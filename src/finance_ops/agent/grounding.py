@@ -34,6 +34,7 @@ NOT_FIGURES = re.compile(
         [
             r"\b[A-Z]{2,4}-\d[\d-]*\b",  # IDs: ACC-1007, INV-202609-1007, CN-0001
             r"\d{4}-\d{2}(?:-\d{2})?(?:T[\d:.]+Z?)?",  # ISO dates, months and timestamps
+            r"\b(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b",  # short dates such as 09-22
             rf"\b{DAY}(?:st|nd|rd|th)?(?:\s*(?:-|\u2013|to|and)\s*{DAY}(?:st|nd|rd|th)?)?"
             rf"\s+{MONTHS}\b(?:\s+\d{{4}})?",  # 21 September 2026, 21-23 Sept
             rf"\b{MONTHS}\s+{DAY}(?:st|nd|rd|th)?(?:\s*(?:-|\u2013)\s*{DAY})?(?:,?\s+\d{{4}})?",
@@ -119,7 +120,9 @@ def source_numbers(sources: Iterable[str]) -> set[Decimal]:
 
 def is_grounded(figure: Figure, allowed: set[Decimal]) -> bool:
     if figure.scale != 1 and len(figure.value.normalize().as_tuple().digits) < 2:
-        return False  # "£2k" would match anything from 1,500 to 2,499
+        # One significant digit: "£2k" would round-match anything from 1,500 to 2,499,
+        # so it counts only as an exact value ("per 1k credits" when a tool says 1000).
+        return figure.value * figure.scale in allowed
     quantum = Decimal(1).scaleb(-figure.places)
     return any(
         (value / figure.scale).quantize(quantum, rounding=ROUND_HALF_UP) == figure.value

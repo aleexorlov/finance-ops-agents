@@ -33,7 +33,9 @@ question = "What plan is Marlow Health on, and what is its monthly fee?"
 expect_status = ["answered"]
 figures = ["4000.00"]
 any_of = [["Enterprise"], ["EUR", "€", "euro"]]
-none_of = ["Growth", "Scale", "Starter", "GBP", "£", "per year", "a year", "per annum", "annually", "yearly"]
+none_of = ["Growth", "Scale", "Starter", "per year", "a year", "per annum", "annually", "yearly"]
+# The fee stated in pounds would be wrong; mentioning that it was not converted is fine.
+none_match = ['(£|GBP)\s?4,?000', '4,?000(\.00)?\s?(GBP|pounds?)']
 required_tools = ["find_accounts"]
 evidence = [
   { tool = "get_account", args = { account_id = "ACC-1005" }, path = "data.current_plan.name", value = "Enterprise" },
