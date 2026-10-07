@@ -51,13 +51,26 @@ I built both to show that one tool contract can serve two very different front e
 | Who runs the loop | My code ([`loop.py`](src/finance_ops/agent/loop.py)) | The ElevenAgents platform |
 | Connection to tools | MCP over stdio, server as a subprocess | MCP over Streamable HTTP with a bearer token |
 | How a run ends | The loop decides: a tool failure can never end as "answered" | The platform decides |
-| Figure check | Every figure in the answer must match a tool result, or the answer is withheld | Not possible before speaking: speech is produced as the model generates it |
+| Figure check | Every figure in the answer must match a tool result, or the answer is withheld | Not possible before speaking, so it runs after the call against the call's own tool results ([`audit.py`](src/finance_ops/voice/audit.py)) |
 | Step cap | 8 model turns, then it stops and lists what it did not resolve | Platform limits; calls are capped at five minutes |
 | Record of a run | Run log of every turn and tool call, plus the server's audit log | The server's audit log, plus ElevenLabs' own conversation history |
-| Evaluation | 15 known-answer cases, 5 runs each (below) | Not yet automated (see next steps) |
+| Evaluation | 15 known-answer cases, 5 runs each (below) | One real call so far, audited figure by figure (below); not yet automated |
 | Configuration | Python | JSON and a prompt file in this repo, applied by a script |
 
 The trade-off is control against reach. The hand-written loop can refuse to show an answer it cannot verify; a voice agent cannot unsay something, so its safeguards have to sit in the tools and the prompt, and its checking happens after the call.
+
+### The voice agent's first call
+
+An 84-second call with four questions, through the tunnel to the same tool server:
+
+| Asked | What it did |
+|---|---|
+| "What does Harbour Analytics owe us?" | Called `find_accounts`, got two matches, read out both with country and currency and asked which one |
+| "The UK one." | Called `list_invoices` for ACC-1012: "owes one thousand and forty-two pounds ninety-six in total. Of that, seven hundred and one pounds sixteen is overdue" |
+| "Why did Kestrel Robotics' September invoice go up?" | Called `compare_invoices` and `reconcile_invoice` together, explained the move to the Scale plan, and found the usage had been charged on the old allowance and rate: "overbilled by one thousand six hundred and thirty-seven pounds thirty-six" |
+| "Can you mark it as paid?" | Refused, because it can only read data, and suggested telling the billing team about the overbilling |
+
+`make voice-audit` then turned the agent's spoken numbers back into digits and checked all 12 figures it gave against the tool results recorded in that call. Eleven matched. The twelfth, the rate's unit ("per thousand"), was correct but unsupported: the tunnel's server had been started before the overage-unit fix (item 8 below), so its tools did not yet return the unit. The server was restarted with the fix.
 
 ## Design decisions
 
@@ -130,7 +143,9 @@ Taken from the commit history, in order.
 6. **The first live model call failed with no detail.** A transient `APIConnectionError` reached the run log as "Connection error." with nothing to diagnose. Model errors now record their root cause. ([ac0ef34](https://github.com/aleexorlov/finance-ops-agents/commit/ac0ef34))
 7. **The first grading rules misgraded in both directions.** Before spending anything on a full run, seven review agents wrote correct answers in varied styles and wrong answers a flawed agent might give, and graded them with the real code: 36 confirmed problems. Correct answers failed on wording ("does not match", a curly apostrophe); wrong ones passed ("not a data gap" contains "gap"; an answer that picked one of the two Harbour accounts). One case was unfair: the planted note only appears in `get_account`, so a correct agent might never see it. The rules were tightened and the reviewers' examples kept as regression tests. ([f602e44](https://github.com/aleexorlov/finance-ops-agents/commit/f602e44))
 8. **Run 1 of the evaluation withheld 11 correct answers.** Each said the overage rate was "0.80 per 1,000 credits", and the 1,000 only existed in a field name, never as a value, so the figure check did its job and stopped the answer. The fix was in the tools, not the prompt: the unit is now defined once and returned as data. ([cb3e7e4](https://github.com/aleexorlov/finance-ops-agents/commit/cb3e7e4), [the fix](https://github.com/aleexorlov/finance-ops-agents/commit/f5452d4))
-9. **The voice agent setup was refused.** The ElevenLabs API key had no write access to ElevenAgents. Nothing was created, because the first call failed and the script stops on any error.
+9. **The voice agent setup was refused twice.** First the ElevenLabs API key had no write access to ElevenAgents; then MCP servers were not enabled for the workspace, which takes a one-time acceptance of ElevenLabs' MCP terms in the dashboard. The first failure happened after the token had been stored as a secret, so a re-run would have duplicated it; the script now reuses the secret by name. ([9376161](https://github.com/aleexorlov/finance-ops-agents/commit/9376161))
+10. **The first voice call's audit found the live server was out of date**, and two bugs in the spoken-number converter (an amount at the end of a sentence, and IDs read digit by digit as "ten oh seven"). The converter cases are now tests. ([8ec519d](https://github.com/aleexorlov/finance-ops-agents/commit/8ec519d))
+11. **The tunnel expired overnight.** Cloudflare quick tunnels are temporary, and ElevenLabs cannot change a registered server's address, so a new tunnel means registering the server again and re-pointing the agent, which the setup script does. A fixed deployment (Cloud Run) is the first next step.
 
 ## How to run it
 
@@ -159,21 +174,21 @@ CI builds the image on every push, checks it runs as a non-root user and refuses
 
 ### The voice agent
 
-ElevenLabs needs a public HTTPS address for the tool server. `make tunnel` opens a temporary Cloudflare tunnel to the local server; `make voice-setup URL=https://<tunnel-host>` prints the three ElevenLabs API calls that create the agent, and `APPLY=1` sends them. The configuration lives in [`voice_agent/`](voice_agent).
+ElevenLabs needs a public HTTPS address for the tool server. `make tunnel` opens a temporary Cloudflare tunnel to the local server; `make voice-setup URL=https://<tunnel-host>` prints the three ElevenLabs API calls that create the agent, and `APPLY=1` sends them. The configuration lives in [`voice_agent/`](voice_agent). After a call, `make voice-audit` checks every figure the agent said against that call's tool results.
 
 ## Limitations
 
 - **The data is small and the problems are known.** Forty accounts, six months, one seed. The evaluation measures how the agent handles known kinds of failure, not open-ended accuracy.
 - **Grading is rule-based.** Phrase lists can still fail a correct paraphrase or pass a wrong answer that uses the right words. An adversarial review reduced this; the remaining known gaps (for example a wrong month cited for context) are documented in the review commit rather than over-fitted.
 - **The figure check is lexical.** It confirms every number in an answer appears in a tool result, not that it is used in the right role: swapping two figures that both appear would pass it. Some cases add pattern checks for this; the check itself does not.
-- **The voice agent has no figure check before it speaks**, is not yet evaluated automatically, and only works while the tunnel is open.
+- **The voice agent cannot be stopped before it speaks.** Its figures are checked after the call, one call has been audited so far, it is not evaluated automatically, and it only works while a temporary tunnel is open.
 - **One model was evaluated** (Claude Sonnet 5.5), and Agent A runs tool calls one after another.
 - **Authentication is a single shared token** on the HTTP transport, with no per-user identity or rate limiting.
 
 ## Next steps
 
 - Deploy the tool server to Cloud Run, so the voice agent does not depend on a laptop.
-- A post-call audit for the voice agent: pull ElevenLabs conversation transcripts and run the same figure check against the server's audit log.
+- Run the call audit automatically after every call, from ElevenLabs' post-call webhook, and alert on any unsupported figure.
 - Run the same cases against Agent B with ElevenLabs' agent testing and simulation.
 - Compare models on pass rate and cost, starting with Claude Haiku 4.5.
 - Per-user authentication and rate limiting on the HTTP transport.
