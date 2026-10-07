@@ -46,12 +46,17 @@ for _ in $(seq 1 60); do
 done
 [[ -n "$HOST" ]] || { echo "The tunnel did not come up."; exit 1; }
 URL="https://$HOST"
-for _ in $(seq 1 30); do
-  curl -fsS --max-time 5 "$URL/healthz" >/dev/null 2>&1 && break
+# Ask public DNS, as ElevenLabs will: asking the local resolver too early makes macOS
+# cache "no such host" for a while, even after the name exists.
+IP=""
+for _ in $(seq 1 60); do
+  IP=$(dig +short @1.1.1.1 "$HOST" | grep -E '^[0-9.]+$' | head -1 || true)
+  [[ -n "$IP" ]] && break
   sleep 2
 done
+[[ -n "$IP" ]] || { echo "Public DNS never resolved $HOST."; exit 1; }
 echo "Public URL: $URL"
-scripts/smoke_test.sh "$URL" "$TOKEN"
+SMOKE_RESOLVE="$HOST:443:$IP" scripts/smoke_test.sh "$URL" "$TOKEN"
 
 if [[ "${VOICE:-}" == "1" ]]; then
   PYTHONPATH=src .venv/bin/python -m finance_ops.voice --mcp-url "$URL" --apply
