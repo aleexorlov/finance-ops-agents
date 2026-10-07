@@ -31,7 +31,7 @@ class AgentSettings:
         return cls(
             api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip(),
             model=os.environ.get("FINANCE_OPS_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL,
-            # Deliberately not ANTHROPIC_BASE_URL: tools like Claude Code set that for themselves.
+            # Deliberately not ANTHROPIC_BASE_URL: other tools in the same shell may set it.
             base_url=os.environ.get("FINANCE_OPS_ANTHROPIC_BASE_URL", DEFAULT_BASE_URL),
         )
 
