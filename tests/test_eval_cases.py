@@ -2,6 +2,7 @@
 
 import json
 import typing
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -137,6 +138,9 @@ def test_failing_tools_fail_only_the_named_tools() -> None:
     assert passed.is_error is False
 
 
+BY_TAG = {c.tag: c for c in CASES}
+
+
 def test_report_and_estimate_render(tmp_path: Path) -> None:
     case = CASES[0]
     records = [
@@ -150,6 +154,31 @@ def test_report_and_estimate_render(tmp_path: Path) -> None:
     assert f"| `{case.id}` |" in markdown
     assert "1/2 runs passed (50.0%)" in markdown
     assert "assumed 15,000 input" in estimate(15, 5, "claude-sonnet-5-5", tmp_path)
+
+
+def test_targets_count_only_answers_a_user_would_have_seen() -> None:
+    case = BY_TAG["tool-failure"]
+
+    def record(n: int, status: str) -> RunRecord:
+        return RunRecord(
+            case.id, n, status, "unexpected_status", (), 1, (), TokenUsage(0, 0), 0.0, 1.0, None, ""
+        )
+
+    runs = [
+        record(1, "answered"),
+        record(2, "blocked_unverified_figures"),
+        record(3, "model_error"),
+    ]
+    runs += [
+        replace(record(n, "model_error"), failures=(f"API error {{'request_id': 'req_{n}'}}",))
+        for n in (4, 5)
+    ]
+    meta = {"model": "claude-sonnet-5-5", "started": "2026-10-06T18:00:00", "repeats": 3}
+    markdown = render_markdown([case], runs, meta)
+    assert "after a tool failure: 0 | 1 of 1 runs (4 not counted: 1 withheld, 3 API errors) |" in (
+        markdown
+    )
+    assert "API error {} (2x)" in markdown
 
 
 # --- regressions from the adversarial review of the grading rules ---------------------

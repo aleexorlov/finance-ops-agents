@@ -1,6 +1,7 @@
 """Turn run records into the markdown table the README quotes, and estimate cost."""
 
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,10 @@ from finance_ops.evals.harness import PRICES, RunRecord, outcome_summary
 # Used only until a real run has been recorded; then measured averages replace them.
 ASSUMED_INPUT_TOKENS_PER_RUN = 15_000
 ASSUMED_OUTPUT_TOKENS_PER_RUN = 700
+
+NOT_SHOWN = ("blocked_unverified_figures", "model_error")
+# API errors differ only by request ID; dropping it lets identical errors be counted together.
+_REQUEST_ID = re.compile(r",? ?'request_id': '[^']*'")
 
 
 def render_markdown(cases: list[Case], records: list[RunRecord], meta: dict[str, Any]) -> str:
@@ -57,9 +62,23 @@ def _targets(
     withheld = sum(r.status == "blocked_unverified_figures" for r in records)
 
     def tag_result(tag: str) -> str:
+        # A withheld answer or a failed API call never reached the user, so it cannot breach
+        # a target about what the user is told; those runs are counted separately.
         runs = tagged.get(tag, [])
-        bad = sum(r.bucket != "pass" for r in runs)
-        return f"{bad} of {len(runs)} runs" if runs else "no cases"
+        if not runs:
+            return "no cases"
+        shown = [r for r in runs if r.status not in NOT_SHOWN]
+        bad = sum(r.bucket != "pass" for r in shown)
+        if len(shown) == len(runs):
+            return f"{bad} of {len(runs)} runs"
+        withheld = sum(r.status == "blocked_unverified_figures" for r in runs)
+        errors = sum(r.status == "model_error" for r in runs)
+        excluded = [f"{withheld} withheld"] if withheld else []
+        excluded += [f"{errors} API error{'s' if errors > 1 else ''}"] if errors else []
+        return (
+            f"{bad} of {len(shown)} runs ({len(runs) - len(shown)} not counted: "
+            f"{', '.join(excluded)})"
+        )
 
     return [
         "Against the targets in [docs/scope.md](../../docs/scope.md):",
@@ -83,7 +102,9 @@ def _targets(
 def _failures(by_case: dict[str, list[RunRecord]]) -> list[str]:
     lines = []
     for case_id, runs in sorted(by_case.items()):
-        reasons = Counter(reason for r in runs if r.bucket != "pass" for reason in r.failures)
+        reasons = Counter(
+            _REQUEST_ID.sub("", reason) for r in runs if r.bucket != "pass" for reason in r.failures
+        )
         for reason, count in reasons.most_common():
             lines.append(f"- `{case_id}`: {reason} ({count}x)")
     return ["Failure reasons:", "", *lines, ""] if lines else []
