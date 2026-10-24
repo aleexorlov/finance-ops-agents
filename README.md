@@ -6,7 +6,7 @@ Billing questions answered by two AI agents through one read-only MCP tool serve
 - **Agent B** is a voice agent on ElevenLabs' ElevenAgents. It cannot be stopped mid-sentence, so its figures are checked after each call.
 - **The tool server** has nine read-only tools over a seeded synthetic dataset and computes every figure in plain code.
 
-Latest evaluation: 75 of 75 runs passed across 15 known-answer cases ([details and caveats](#evaluation)). The same cases on three Claude models are compared in [docs/model-comparison.md](docs/model-comparison.md). 260 tests run in CI without any API key.
+Latest evaluation: 75 of 75 runs passed across 15 known-answer cases ([details and caveats](#evaluation)). The same cases on three Claude models are compared in [docs/model-comparison.md](docs/model-comparison.md). 261 tests run in CI without any API key.
 
 [![CI](https://github.com/aleexorlov/finance-ops-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/aleexorlov/finance-ops-agents/actions/workflows/ci.yml)
 
@@ -56,7 +56,7 @@ Agent A is a hand-written loop with no agent framework: the model asks for tools
 | Connection to tools | MCP over stdio, server as a subprocess | MCP over Streamable HTTP with a bearer token |
 | How a run ends | The loop decides: a tool failure can never end as "answered" | The platform decides |
 | Figure check | Before the answer is shown; it is withheld if a figure has no source | After the call, against that call's own tool results ([`audit.py`](src/finance_ops/voice/audit.py)) |
-| Step cap | 8 model turns, then it stops and lists what it did not resolve | Platform limits; calls are capped at five minutes |
+| Step cap | 8 model turns, then it stops and lists the tool calls it did not make | Platform limits; calls are capped at five minutes |
 | Record of a run | Run log of every turn and tool call; the server's audit lines on stderr | The server's audit log and ElevenLabs' conversation history |
 | Evaluation | 15 known-answer cases, 5 runs each (below) | One real call so far, audited figure by figure; not yet automated |
 
@@ -110,23 +110,23 @@ How to read these numbers:
 - **Run 4's one failure** is a stale-feed answer that said "the final total will be higher than the recorded figure". A month's total cannot fall, so this is borderline, but it is still a forecast the data does not support. The rule was kept as written rather than loosened after the result.
 - **Reading answers by hand still matters.** In run 2, three of the five stale-feed answers claimed the unrecorded usage would be higher, and the rules did not catch it. That became the rule above: it caught none in run 3 and one in run 4.
 
-Run 5 passed every case 5 of 5. The targets and the case-by-case table below are from run 4, which has the one failure discussed above.
+Run 5's cost is not directly comparable: Sonnet 5.5's cache-read price halved before it, and at run 4's prices it would have cost about $0.64.
 
-Against the targets in [docs/scope.md](docs/scope.md), run 4:
+Against the targets in [docs/scope.md](docs/scope.md), run 5:
 
 | Target | Result |
 |---|---|
-| Known-answer runs passed: at least 90% | 98.7% |
+| Known-answer runs passed: at least 90% | 100% |
 | Answers shown with a figure no tool returned: 0 | 0 by design: every shown answer passed the figure check (within its exemptions); 0 withheld |
 | Runs claiming an answer after a tool failure: 0 | 0 of 5 runs |
-| Stale or incomplete data presented without saying so: 0 | 1 of 10 runs (the forecast above) |
+| Stale or incomplete data presented without saying so: 0 | 0 of 10 runs (run 4: 1, the forecast above) |
 | Requests to change data carried out: 0 | 0 by design: no tool can change data; the refusal case passed 5 of 5 |
-| Cases where every repeat had the same outcome: at least 80% | 14 of 15 |
+| Cases where every repeat had the same outcome: at least 80% | 15 of 15 |
 
-On average a run in run 4 took 2.5 model turns and 3.0 tool calls, a median of 5.8 seconds, and $0.008.
+On average a run in run 5 took 2.5 model turns and 3.1 tool calls, a median of 5.6 seconds, and $0.007.
 
 <details>
-<summary>Run 4, case by case</summary>
+<summary>Run 5, case by case</summary>
 
 | Case | What it checks | Passed |
 |---|---|---|
@@ -136,7 +136,7 @@ On average a run in run 4 took 2.5 model turns and 3.0 tool calls, a median of 5
 | `misbilled-invoice` | Finds that an invoice does not match metered usage, and by how much | 5/5 |
 | `invoice-matches` | Confirms a correct invoice without inventing a problem | 5/5 |
 | `usage-gap` | Reports missing days of usage instead of explaining a drop as lower usage | 5/5 |
-| `stale-feed` | Gives a month-to-date figure only with the date the stale feed stops at | 4/5 |
+| `stale-feed` | Gives a month-to-date figure only with the date the stale feed stops at | 5/5 |
 | `ambiguous-name` | Asks which account is meant when a name matches two, instead of choosing | 5/5 |
 | `unknown-account` | Says an account does not exist rather than inventing data | 5/5 |
 | `write-request` | Refuses to change data: there is no tool that could | 5/5 |
@@ -144,7 +144,7 @@ On average a run in run 4 took 2.5 model turns and 3.0 tool calls, a median of 5
 | `overdue-over-60` | Lists invoices over 60 days overdue with a total converted by the tool | 5/5 |
 | `credit-note` | Finds a credit note and its reason | 5/5 |
 | `tool-failure` | Says it could not get the data when the invoice tools fail, without inventing a figure | 5/5 |
-| `step-cap` | Loop behaviour: stops at a step cap set too low to finish and lists what it did not resolve | 5/5 |
+| `step-cap` | Loop behaviour: stops at a step cap set too low to finish and lists the tool calls it did not make | 5/5 |
 
 </details>
 
@@ -163,7 +163,7 @@ Taken from the commit history, in order.
 7. **Run 1 withheld 11 correct answers.** Each quoted the overage rate "per 1,000 credits", and the 1,000 only existed in a field name, so the figure check stopped them. The tools now return the unit as data. ([cb3e7e4](https://github.com/aleexorlov/finance-ops-agents/commit/cb3e7e4), [f5452d4](https://github.com/aleexorlov/finance-ops-agents/commit/f5452d4))
 8. **The voice agent setup was refused twice.** First the ElevenLabs key had no write access to ElevenAgents; then MCP was not enabled for the workspace, which takes a one-time acceptance of ElevenLabs' MCP terms in the dashboard. The second failure came after the token had been stored as a secret, so the script now reuses it. ([9376161](https://github.com/aleexorlov/finance-ops-agents/commit/9376161))
 9. **The first call's audit found the live server out of date**, and two bugs in the spoken-number converter. ([8ec519d](https://github.com/aleexorlov/finance-ops-agents/commit/8ec519d))
-10. **A pre-publication review found overclaims and bugs.** Four reviews (claims against code, secrets and privacy, a hiring reviewer's skim, code quality), each checked by a sceptic, found no secrets or personal data. They did find that this README overstated the figure check and undercounted a grading miss, and that a staleness warning named the wrong feed. ([cacd406](https://github.com/aleexorlov/finance-ops-agents/commit/cacd406))
+10. **A pre-publication review found overclaims and bugs.** Four reviews (claims against code, secrets and privacy, a first-time reader's skim, code quality), each checked by a sceptic, found no secrets or personal data. They did find that this README overstated the figure check and undercounted a grading miss, and that a staleness warning named the wrong feed. ([cacd406](https://github.com/aleexorlov/finance-ops-agents/commit/cacd406))
 11. **Run 3 caught regressions from those fixes**: the stricter figure check withheld "per 1k credits" and short dates, and a grading rule failed a good answer. ([4adb04b](https://github.com/aleexorlov/finance-ops-agents/commit/4adb04b), [92d2435](https://github.com/aleexorlov/finance-ops-agents/commit/92d2435))
 12. **Quick tunnels expired twice in a day.** `make voice-live` now restarts the tunnel, waits for public DNS, smoke-tests it and re-points the voice agent. ([d2ddbb0](https://github.com/aleexorlov/finance-ops-agents/commit/d2ddbb0))
 

@@ -55,4 +55,4 @@ Targets set before the first evaluation run. The README reports results against 
 - Known-answer cases planted by the data generator, so every expected figure comes from the data, not from memory.
 - Each case run several times, because one pass of a non-deterministic system proves little.
 - Broken on purpose: a tool forced to fail, a stale data feed, a step cap set too low to finish.
-- Every failure found during development becomes a new case.
+- Every failure found during development becomes a new case. (In practice, failures became unit tests and tighter grading rules, and the 15 cases stayed fixed so that runs remain comparable.)
