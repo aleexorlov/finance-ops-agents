@@ -6,7 +6,7 @@ Billing questions answered by two AI agents through one read-only MCP tool serve
 - **Agent B** is a voice agent on ElevenLabs' ElevenAgents. It cannot be stopped mid-sentence, so its figures are checked after each call.
 - **The tool server** has nine read-only tools over a seeded synthetic dataset and computes every figure in plain code.
 
-Latest evaluation: 74 of 75 runs passed across 15 known-answer cases ([details and caveats](#evaluation)). 259 tests run in CI without any API key.
+Latest evaluation: 75 of 75 runs passed across 15 known-answer cases ([details and caveats](#evaluation)). The same cases on three Claude models are compared in [docs/model-comparison.md](docs/model-comparison.md). 260 tests run in CI without any API key.
 
 [![CI](https://github.com/aleexorlov/finance-ops-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/aleexorlov/finance-ops-agents/actions/workflows/ci.yml)
 
@@ -100,14 +100,17 @@ Fifteen known-answer cases ([`evals/cases.toml`](evals/cases.toml)) run five tim
 | [2](evals/results/20261006T191641Z.md) | 75/75 (100%) | 0 | $0.59 | The tools return the overage rate's unit as data ([f5452d4](https://github.com/aleexorlov/finance-ops-agents/commit/f5452d4)) |
 | [3](evals/results/20261007T140223Z.md) | 65/75 (86.7%) | 7 | $0.61 | Pre-publication review fixes: a stricter figure check, clearer tool descriptions, a new stale-feed rule ([cacd406](https://github.com/aleexorlov/finance-ops-agents/commit/cacd406)) |
 | [4](evals/results/20261007T140723Z.md) | 74/75 (98.7%) | 0 | $0.59 | Fixes for the regressions run 3 found ([92d2435](https://github.com/aleexorlov/finance-ops-agents/commit/92d2435)) |
+| [5](evals/results/20261024T151101Z.md) | 75/75 (100%) | 0 | $0.56 | Answers may use 2,048 output tokens, up from 1,024, and prices rechecked ([2107708](https://github.com/aleexorlov/finance-ops-agents/commit/2107708)) |
 
 How to read these numbers:
 
-- **What changed between runs is only what the table says.** The system prompt has not changed since Agent A was written. Between runs 1 and 2 only the tools changed. The cases and grading rules changed before runs 1, 3 and 4, each in a commit that says why.
-- **There is no held-out set.** All four runs use the same 15 cases, so the later runs are regression checks on known situations. They do not measure open-ended accuracy.
+- **What changed between runs is only what the table says.** The system prompt has not changed since Agent A was written. Between runs 1 and 2 only the tools changed; between runs 4 and 5, only the output cap. The cases and grading rules changed before runs 1, 3 and 4, each in a commit that says why.
+- **There is no held-out set.** All five runs use the same 15 cases, so the later runs are regression checks on known situations. They do not measure open-ended accuracy.
 - **Two targets hold by construction.** No answer with an unverified figure can be shown, and no data can be changed. The measured results are the pass rate, consistency, and the tool-failure and data-quality cases. The step-cap case checks the loop's behaviour, which is deterministic once the cap is set.
 - **Run 4's one failure** is a stale-feed answer that said "the final total will be higher than the recorded figure". A month's total cannot fall, so this is borderline, but it is still a forecast the data does not support. The rule was kept as written rather than loosened after the result.
 - **Reading answers by hand still matters.** In run 2, three of the five stale-feed answers claimed the unrecorded usage would be higher, and the rules did not catch it. That became the rule above: it caught none in run 3 and one in run 4.
+
+Run 5 passed every case 5 of 5. The targets and the case-by-case table below are from run 4, which has the one failure discussed above.
 
 Against the targets in [docs/scope.md](docs/scope.md), run 4:
 
@@ -199,7 +202,7 @@ ElevenLabs needs a public HTTPS address for the tool server. `make voice-live` s
 - **Grading is rule-based.** Phrase lists can still fail a correct paraphrase or pass a wrong answer that uses the right words; the known gaps are listed at the top of [`evals/cases.toml`](evals/cases.toml).
 - **The figure check is lexical.** It confirms that each number appears in a tool result, not that it is used in the right role, and it exempts IDs, dates, years and small counts.
 - **The voice agent cannot be stopped before it speaks.** Its figures are checked after the call, one call has been audited so far, it is not evaluated automatically, and it depends on a temporary tunnel.
-- **One model was evaluated** (Claude Sonnet 5.5), and Agent A runs tool calls one after another.
+- **Three models have been compared, one run each** ([docs/model-comparison.md](docs/model-comparison.md)). Claude Opus 5.5 is not among them yet, because its run was cut short. Agent A runs tool calls one after another.
 - **Authentication is a single shared token** on the HTTP transport, with no per-user identity or rate limiting.
 
 ## Next steps
@@ -207,7 +210,7 @@ ElevenLabs needs a public HTTPS address for the tool server. `make voice-live` s
 - Deploy the tool server to Cloud Run, so the voice agent does not depend on a laptop.
 - Run the call audit automatically after every call, from ElevenLabs' post-call webhook, and alert on any unsupported figure.
 - Run the same cases against Agent B with ElevenLabs' agent testing and simulation.
-- Compare models on pass rate and cost, starting with Claude Haiku 4.5.
+- Fix the grading rule and the figure-check gap that the Opus 5.5 run found, then re-run every model, including Opus.
 - Per-user authentication and rate limiting on the HTTP transport.
 - An n8n workflow that runs a nightly reconciliation and posts exceptions to Slack.
 
