@@ -29,10 +29,13 @@ class Price:
     cache_read: float
 
 
-# From platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-06.
+# From platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-24. Runs before
+# that date recorded their cost at the prices then (Sonnet 5.5 cache hits were 0.20).
+# Haiku 5.5 is the tier for prompts up to 100,000 tokens; this agent's are far smaller.
 PRICES = {
-    "claude-sonnet-5-5": Price(2.00, 10.00, 2.50, 0.20),
     "claude-opus-5-5": Price(4.00, 20.00, 5.00, 0.20),
+    "claude-sonnet-5-5": Price(2.00, 10.00, 2.50, 0.10),
+    "claude-haiku-5-5": Price(0.10, 0.50, 0.125, 0.01),
     "claude-haiku-4-5-20251001": Price(1.00, 5.00, 1.25, 0.10),
 }
 

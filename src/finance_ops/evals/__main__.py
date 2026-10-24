@@ -10,12 +10,14 @@ evals/results/<stamp>.json (every run) and evals/results/latest.md (the table).
 
 import argparse
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import anyio
 from dotenv import load_dotenv
 
+from finance_ops.agent.model import DEFAULT_MODEL
 from finance_ops.agent.runner import AgentSettings
 from finance_ops.config import db_path
 from finance_ops.evals.grading import load_cases
@@ -33,11 +35,14 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--only", help="comma-separated case IDs")
     parser.add_argument("--concurrency", type=int, default=3)
+    parser.add_argument("--model", help="override FINANCE_OPS_MODEL for this run")
     parser.add_argument("--estimate", action="store_true", help="print a cost estimate and exit")
     args = parser.parse_args()
 
     load_dotenv(REPO / ".env")
     settings = AgentSettings.from_env()
+    if args.model:
+        settings = replace(settings, model=args.model)
     cases = load_cases(args.cases)
     if args.only:
         wanted = set(args.only.split(","))
@@ -72,11 +77,14 @@ def main() -> None:
     meta = {"model": settings.model, "started": started.isoformat(), "repeats": args.repeats}
     # Runs of selected cases are trials: kept locally (partial-*.json is gitignored).
     prefix = "partial-" if args.only else ""
-    save_records(records, RESULTS_DIR / f"{prefix}{stamp}.json", meta)
+    # Runs on the default model keep the original naming; others carry the model name.
+    name = stamp if settings.model == DEFAULT_MODEL else f"{stamp}-{settings.model}"
+    save_records(records, RESULTS_DIR / f"{prefix}{name}.json", meta)
     markdown = render_markdown(cases, records, meta)
     if not args.only:
-        (RESULTS_DIR / f"{stamp}.md").write_text(markdown, encoding="utf-8")
-        (RESULTS_DIR / "latest.md").write_text(markdown, encoding="utf-8")
+        (RESULTS_DIR / f"{name}.md").write_text(markdown, encoding="utf-8")
+        if settings.model == DEFAULT_MODEL:  # latest.md is the README's model only
+            (RESULTS_DIR / "latest.md").write_text(markdown, encoding="utf-8")
     print(markdown)
 
 

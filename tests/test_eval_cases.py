@@ -1,5 +1,6 @@
 """The evaluation's own correctness: case file, grading rules, fault injection, report."""
 
+import json
 import typing
 from pathlib import Path
 from typing import Any
@@ -254,3 +255,35 @@ def test_correct_answers_the_first_rules_failed_now_pass(case_id: str, answer: s
 )
 def test_wrong_answers_the_first_rules_passed_now_fail(case_id: str, answer: str) -> None:
     assert graded(case_id, answer) == "wrong_content"
+
+
+def test_compare_summarises_runs_side_by_side(tmp_path: Path) -> None:
+    from finance_ops.evals.compare import render, summarise
+
+    def run(case: str, bucket: str, status: str = "answered") -> dict:
+        return {
+            "case_id": case,
+            "bucket": bucket,
+            "status": status,
+            "turns": 2,
+            "tool_calls": ["a", "b"],
+            "seconds": 3.0,
+            "cost_usd": 0.01,
+        }
+
+    path = tmp_path / "r.json"
+    path.write_text(
+        json.dumps(
+            {
+                "meta": {"model": "m"},
+                "runs": [
+                    run("x", "pass"),
+                    run("x", "unexpected_status", "blocked_unverified_figures"),
+                ],
+            }
+        )
+    )
+    summary = summarise(path)
+    assert (summary["passed"], summary["withheld"], summary["consistent"]) == (1, 1, 0)
+    assert summary["cost_per_pass"] == 0.02
+    assert "| `m` | 1/2 (50.0%) | 1 | 0/1 |" in render([summary])

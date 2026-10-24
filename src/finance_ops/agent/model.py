@@ -6,7 +6,8 @@ from finance_ops.agent.types import ModelTurn, TokenUsage, ToolCall, ToolSpec
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
 DEFAULT_BASE_URL = "https://api.anthropic.com"
-MAX_OUTPUT_TOKENS = 1024
+# Raised from 1024: Haiku 5.5 answers ran past it (see docs/model-comparison.md).
+MAX_OUTPUT_TOKENS = 2048
 
 
 class ModelError(Exception):
