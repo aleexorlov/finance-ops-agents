@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Two agents (a hand-written Claude tool loop and an ElevenAgents voice agent) sharing one read-only MCP tool server over synthetic billing data."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "Alexander Orlov" }]
 # The MCP server needs only these. The model SDK lives in the "agent" extra,
 # so the server image has no way to call a model and never holds an API key.
@@ -35,7 +35,7 @@ addopts = "-q"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
