@@ -26,6 +26,8 @@ def summarise(path: Path) -> dict[str, Any]:
         "runs": len(runs),
         "passed": passed,
         "withheld": sum(r["status"] == "blocked_unverified_figures" for r in runs),
+        # The API call itself failed (for example, rate limit or no credit): not the model's doing.
+        "errors": sum(r["status"] == "model_error" for r in runs),
         "consistent": sum(len({r["bucket"] for r in rs}) == 1 for rs in by_case.values()),
         "cases": len(by_case),
         "turns": statistics.mean(r["turns"] for r in runs),
@@ -39,16 +41,17 @@ def summarise(path: Path) -> dict[str, Any]:
 
 def render(summaries: list[dict[str, Any]]) -> str:
     lines = [
-        "| Model | Passed | Withheld | Consistent cases | Turns | Tool calls | Median s "
-        "| Cost | Cost per passing answer |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Model | Passed | Withheld | API errors | Consistent cases | Turns | Tool calls "
+        "| Median s | Cost | Cost per passing answer |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for s in summaries:
         per_pass = f"${s['cost_per_pass']:.4f}" if s["cost_per_pass"] is not None else "n/a"
         lines.append(
             f"| `{s['model']}` | {s['passed']}/{s['runs']} ({100 * s['passed'] / s['runs']:.1f}%) "
-            f"| {s['withheld']} | {s['consistent']}/{s['cases']} | {s['turns']:.1f} "
-            f"| {s['tool_calls']:.1f} | {s['seconds']:.1f} | ${s['cost']:.2f} | {per_pass} |"
+            f"| {s['withheld']} | {s['errors']} | {s['consistent']}/{s['cases']} "
+            f"| {s['turns']:.1f} | {s['tool_calls']:.1f} | {s['seconds']:.1f} "
+            f"| ${s['cost']:.2f} | {per_pass} |"
         )
     cases = list(summaries[0]["per_case"])
     lines += [

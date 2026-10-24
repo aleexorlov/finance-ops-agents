@@ -279,11 +279,13 @@ def test_compare_summarises_runs_side_by_side(tmp_path: Path) -> None:
                 "runs": [
                     run("x", "pass"),
                     run("x", "unexpected_status", "blocked_unverified_figures"),
+                    run("y", "unexpected_status", "model_error"),
                 ],
             }
         )
     )
     summary = summarise(path)
-    assert (summary["passed"], summary["withheld"], summary["consistent"]) == (1, 1, 0)
-    assert summary["cost_per_pass"] == 0.02
-    assert "| `m` | 1/2 (50.0%) | 1 | 0/1 |" in render([summary])
+    assert (summary["passed"], summary["withheld"], summary["errors"]) == (1, 1, 1)
+    assert summary["consistent"] == 1
+    assert summary["cost_per_pass"] == 0.03
+    assert "| `m` | 1/3 (33.3%) | 1 | 1 | 1/2 |" in render([summary])
